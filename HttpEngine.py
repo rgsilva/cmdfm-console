@@ -37,3 +37,8 @@ class HttpEngine():
 		except (http.client.BadStatusLine, http.client.CannotSendRequest):
 			self.reconnect()
 			return self.json(url)
+		except:
+			print('- Something went quite wrong inside this application.')
+			print('- Sit down and relax as it tries to fix itself!')
+			self.reconnect()
+			return self.json(url)
