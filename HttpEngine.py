@@ -1,10 +1,19 @@
-import http.client, json
+import http.client, json, urllib.parse
 
-class HttpConnection():
+class HttpEngine():
 	connection = None
 
 	def __init__(self, domain):
 		self.connection = http.client.HTTPConnection(domain)	
+
+	# -----------------------------------------
+	# General functions
+
+	def escape(self, str):
+		return urllib.parse.quote_plus(str)
+
+	# -----------------------------------------
+	# Connection-related functions
 
 	def reconnect(self):
 		try:
@@ -14,6 +23,9 @@ class HttpConnection():
 			None
 
 		self.connection.connect()
+
+	# -----------------------------------------
+	# Request functions
 
 	def json(self, url):
 		self.connection.request('GET', url)
