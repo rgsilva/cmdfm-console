@@ -117,6 +117,10 @@ class Console(cmd.Cmd):
 			print("- The genre you specified is invalid.")
 			return False
 
+		# We got a song, so let's stop our timer, just in case.
+		if (self.timer != None):
+			self.timer.cancel()
+
 		# Play it.
 		try:
 			self.player.play(info['stream_url'] + CLIENT_ID)
