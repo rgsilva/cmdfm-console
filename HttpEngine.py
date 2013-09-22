@@ -34,6 +34,6 @@ class HttpEngine():
 			data = response.read().decode('ascii')
 
 			return json.loads(data)
-		except http.client.BadStatusLine:
+		except (http.client.BadStatusLine, http.client.CannotSendRequest):
 			self.reconnect()
 			return self.json(url)
