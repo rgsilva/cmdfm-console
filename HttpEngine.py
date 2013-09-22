@@ -28,8 +28,12 @@ class HttpEngine():
 	# Request functions
 
 	def json(self, url):
-		self.connection.request('GET', url)
-		response = self.connection.getresponse()
-		data = response.read().decode('ascii')
+		try:
+			self.connection.request('GET', url)
+			response = self.connection.getresponse()
+			data = response.read().decode('ascii')
 
-		return json.loads(data)
+			return json.loads(data)
+		except http.client.BadStatusLine:
+			self.reconnect()
+			return self.json(url)

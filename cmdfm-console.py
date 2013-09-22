@@ -1,50 +1,21 @@
 #!/usr/bin/python
 
-import cmd, sys, http.client, json, subprocess, signal
+import cmd, sys, threading
+
+from ExternalPlayer import *
+from HttpEngine import *
 
 # -----------------------------------------
 # Constants
 
-CLIENT_ID		= '?client_id=2b659ea66970555922d89ce9c07b2d0d'
-DOMAIN 			= 'cmd.fm'
-REQUEST_GENRES	= '/get.php?all_genres=1'
-REQUEST_PLAY	= '/get.php?genre='
+CHECK_INTERVAL			= 3
 
-EXTERNAL_PLAYER = 'mpg123'
-EXTERNAL_PLAYER_ARGS = '-q'
+DOMAIN 					= 'cmd.fm'
+REQUEST_GENRES_LIST		= '/get.php?all_genres=1'
+REQUEST_GENRES_SEARCH	= '/get.php?genres=1&q='
+REQUEST_PLAY			= '/get.php?genre='
 
-# -----------------------------------------
-# HTTP stuff
-
-class HttpConnection():
-	connection = None
-
-	def __init__(self, domain):
-		self.connection = http.client.HTTPConnection(domain)
-
-	def json(self, url):
-		self.connection.request('GET', url)
-		response = self.connection.getresponse()
-		data = response.read().decode('ascii')
-
-		return json.loads(data)
-
-# -----------------------------------------
-# Playback stuff
-
-class ExternalPlayer():
-	process = None
-
-	def play(self, url):
-		if (self.process != None):
-			self.stop()
-
-		self.process = subprocess.Popen([EXTERNAL_PLAYER, EXTERNAL_PLAYER_ARGS, url])
-		print("+ Running", EXTERNAL_PLAYER, "with PID", self.process.pid)
-
-	def stop(self):
-		self.process.send_signal(signal.SIGTERM)
-		self.process = None
+CLIENT_ID				= '?client_id=2b659ea66970555922d89ce9c07b2d0d'
 
 # -----------------------------------------
 # Command-line interface
@@ -52,6 +23,9 @@ class ExternalPlayer():
 class Console(cmd.Cmd):
 	http = None
 	player = None
+	timer = None
+
+	prompt = '(cmd.fm) '
 
 	# --- Internal code ---
 
@@ -59,37 +33,127 @@ class Console(cmd.Cmd):
 		self.http = http
 		self.player = player
 
+	def check_playback(self):
+		# If our last song has finished and we still have a genre, repeat it.
+		if (self.last_genre != None) and (not self.player.isPlaying()):
+			# Let's repeat the last genre.
+			self.do_play(self.last_genre)
+		else:
+			# Just reset our timer.
+			self.timer = threading.Timer(CHECK_INTERVAL, self.check_playback)
+			self.timer.start()
+
+	# --- Console controls ---
+
+	def emptyline(self):
+		return False
+
 	# --- Basic functions ---
 
 	def do_about(self, args):
-		print('TODO about')
+		print('  * * * * * * * * * * * * * * * * * * * * * * *')
+		print('  *                                           *')
+		print('  * cmd.fm console                            *')
+		print('  *                                           *')
+		print('  * https://github.com/rgsilva/cmdfm-console  *')
+		print('  *                                           *')
+		print('  * * * * * * * * * * * * * * * * * * * * * * *')
 
-	def do_exit(self, arg):
+	def do_exit(self, args):
+		if (self.player.isPlaying()):
+			self.player.stop()
+
+		print('Bye!')
 		return True
+
+	def do_help(self, args):
+		print('Available commands are')
+		print('---------------------------------------------------------')
+		print('genre list               # Lists all genres')
+		print('genre search <query>     # Search genre')
+		print('play <genre name>        # Play genre tracks')
+		#print('status                   # Shows track status')
+		#print('resume                   # Resume playback')
+		#print('pause                    # Pause playback')
+		print('skip                     # Skip current track')
+		print('about                    # Hello?')
+		print('---------------------------------------------------------')
 
 	# --- cmd.fm functions ---
 
+	# genre list
+	# genre search <keyword>
 	def do_genre(self, args):
+		url = None
+
 		if (args == 'list'):
-			genres = self.http.json(REQUEST_GENRES)
-			for g in genres:
-				print("  -", g)
+			url = REQUEST_GENRES_LIST
+		elif (args.split()[0] == 'search'):
+			keyword = ' '.join(args.split()[1:])
+			if (keyword == ''):
+				print('- You need to specify a keyword to look for.')
+				return False
 
+			url = REQUEST_GENRES_SEARCH + self.http.escape(keyword)
+		else:
+			print("- Invalid usage.")
+			return False
+
+		genres = self.http.json(url)
+		for g in genres:
+			print("-", g)
+
+	# play <genre>
 	def do_play(self, genre):
-		info = self.http.json(REQUEST_PLAY + genre)
+		if (genre == ''):
+			print("- You need to specify a genre.")
+			return False
 
-		print('+ Playing', info['title'])
-		self.player.play(info['stream_url'] + CLIENT_ID)
+		# Get the stream information.
+		info = self.http.json(REQUEST_PLAY + self.http.escape(genre))
 
-	def do_stop(self, genre):
-		self.player.stop()
+		# Just in case.
+		if (info == False):
+			print("- The genre you specified is invalid.")
+			return False
+
+		# Play it.
+		try:
+			self.player.play(info['stream_url'] + CLIENT_ID)
+			print('+ Playing', info['title'])
+
+			# Save the genre for repeating
+			self.last_genre = genre
+
+			# Start the timer.
+			self.check_playback()
+		except:
+			print("- Something went wrong with the playback. Please try again.")
+
+	# stop
+	def do_stop(self, args):
+		if (self.player.isPlaying()):
+			self.last_genre = None
+			self.player.stop()
+		else:
+			print('- Cannot stop a song that\'s not playing!')
+			return False
+
+	# skip
+	def do_skip(self, args):
+		if (self.player.isPlaying()):
+			self.player.stop()
+			self.do_play(self.last_genre)
+		else:
+			print('- Cannot skip a song that\'s not playing!')
+			return False
 
 # -----------------------------------------
 # General code
 
 def startup():
 	player = ExternalPlayer()
-	http = HttpConnection(DOMAIN)
+	http = HttpEngine(DOMAIN)
 
 	console = Console()
 	console.prepare(http, player)
