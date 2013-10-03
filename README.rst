@@ -1,7 +1,9 @@
+*This project has been discontinued (at least for now) because I'm too lazy to fix it. They changed how the frontend communicates with the backend, so it stopped working completely. Feel free to fix it if you want! :)*
+
 cmd.fm console interface
 ========================
 
-This a very poor and basic console interface for the http://cmd.fm/. It's incomplete, but it works... for now.
+This is/was a very poor and basic console interface for the http://cmd.fm/.
 
 Why?
 ~~~~
